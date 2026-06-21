@@ -1,6 +1,8 @@
 ![ConsumerSim HNB framework](assets/consumersim-hnb-framework.png)
 
-# ConsumerSim Core Pipeline (JP / EU / US)
+# ConsumerSim 
+
+## Core Pipeline (JP / EU / US)
 
 This directory contains a clean rewrite of the monthly ConsumerSim core pipeline. Its scope is limited to five stages:
 
