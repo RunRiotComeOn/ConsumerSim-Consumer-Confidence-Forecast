@@ -1,6 +1,8 @@
 name: Update and deploy ConsumerSim site
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       month:
