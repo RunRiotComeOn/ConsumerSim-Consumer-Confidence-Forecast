@@ -348,26 +348,43 @@ function renderMapValues() {
 function renderHeroForecasts() {
   data.regions.forEach((region) => {
     const monthly = data.monthlyPredictions.find((item) => item.id === region.id);
+    const weekly = latestWeeklyForecast(region.id);
     const valueNode = document.querySelector(`[data-hero-value="${region.id}"]`);
     const periodNode = document.querySelector(`[data-hero-period="${region.id}"]`);
     const noteNode = document.querySelector(`[data-hero-note="${region.id}"]`);
-    if (valueNode) valueNode.textContent = monthly?.valueLabel || fmt(region.latest.forecast, 2);
-    if (periodNode) periodNode.textContent = monthly?.period || region.latest.period || "--";
+    if (valueNode) valueNode.textContent = fmt(weekly?.forecast ?? region.latest.forecast, 2);
+    if (periodNode) periodNode.textContent = weekly ? `${weekly.label} / ${weekly.period}` : monthly?.period || "--";
     if (noteNode) noteNode.textContent = heroForecastNote(region);
     drawHeroForecastChart(region);
   });
 }
 
+function latestWeeklyForecast(regionId) {
+  return data.weeklyPredictions.filter((point) => point.id === regionId).at(-1);
+}
+
 function heroForecastPoints(region) {
-  return region.series
-    .slice(-7)
+  const actualMonthly = region.series
+    .filter((point) => Number.isFinite(point.actual))
+    .slice(-4)
     .map((point) => ({
       label: point.period,
-      forecast: point.forecast,
+      forecast: null,
       actual: point.actual,
-      forecastOnly: !Number.isFinite(point.actual)
-    }))
-    .filter((point) => Number.isFinite(point.forecast) || Number.isFinite(point.actual));
+      forecastOnly: false
+    }));
+  const weeklyForecast = data.weeklyPredictions
+    .filter((point) => point.id === region.id)
+    .slice(-4)
+    .map((point) => ({
+      label: point.label,
+      forecast: point.forecast,
+      actual: null,
+      forecastOnly: true
+    }));
+  return [...actualMonthly, ...weeklyForecast].filter(
+    (point) => Number.isFinite(point.forecast) || Number.isFinite(point.actual)
+  );
 }
 
 function heroForecastNote(region) {
@@ -375,11 +392,11 @@ function heroForecastNote(region) {
   const latestForecast = [...points].reverse().find((point) => Number.isFinite(point.forecast))?.forecast;
   const latestActual = [...points].reverse().find((point) => Number.isFinite(point.actual))?.actual;
   if (!Number.isFinite(latestForecast) || !Number.isFinite(latestActual)) {
-    return "Latest monthly forecast extends beyond the most recent released actual.";
+    return "Weekly forecast updates are shown against monthly ground truth.";
   }
   const gap = latestForecast - latestActual;
   const direction = gap >= 0 ? "above" : "below";
-  return `Latest monthly forecast is ${Math.abs(gap).toFixed(2)} ${direction} the most recent released actual.`;
+  return `Latest weekly forecast is ${Math.abs(gap).toFixed(2)} ${direction} the latest monthly ground truth.`;
 }
 
 function drawHeroForecastChart(region) {
