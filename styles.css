@@ -293,10 +293,13 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 500px;
   padding: 22px;
   border-radius: 26px;
   overflow: hidden;
+}
+
+.monthly-forecast-section {
+  margin-top: 16px;
 }
 
 .hero-forecast-head {
@@ -331,18 +334,30 @@ h2 {
   white-space: nowrap;
 }
 
+.line-key {
+  display: inline-block;
+  width: 32px;
+  height: 0;
+  border-top: 3px solid #101010;
+}
+
+.forecast-line {
+  border-color: #d64f2a;
+  border-top-style: dashed;
+}
+
 .hero-forecast-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .hero-forecast-card {
-  display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  min-height: 132px;
-  padding: 14px;
+  min-height: 330px;
+  padding: 16px;
   border: 1px solid rgba(16, 16, 16, 0.11);
   border-radius: 18px;
   background: rgba(255, 253, 248, 0.72);
@@ -350,7 +365,7 @@ h2 {
 
 .hero-card-top {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
@@ -378,13 +393,12 @@ h2 {
 .hero-region-chart {
   width: 100%;
   min-width: 0;
-  height: 150px;
+  height: 210px;
   align-self: stretch;
 }
 
 .hero-forecast-card p {
-  grid-column: 1 / -1;
-  margin: -4px 0 0;
+  margin: 0;
   color: #4b4944;
   line-height: 1.35;
 }
@@ -1676,13 +1690,13 @@ footer {
     grid-template-columns: 1fr;
   }
 
+  .hero-forecast-grid {
+    grid-template-columns: 1fr;
+  }
+
   .section-head {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .hero-forecast-card {
-    grid-template-columns: 150px minmax(0, 1fr);
   }
 
   .table-context {
@@ -1734,11 +1748,11 @@ footer {
   }
 
   .hero-forecast-card {
-    grid-template-columns: 1fr;
+    min-height: 0;
   }
 
   .hero-region-chart {
-    height: 140px;
+    height: 180px;
   }
 
   .segmented {

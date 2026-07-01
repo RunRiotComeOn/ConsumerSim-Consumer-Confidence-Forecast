@@ -332,7 +332,7 @@ function typeLoop(node, phrases) {
 
 function startTypingStatus() {
   typeLoop(els.typingStatus, [
-    "reading the latest 2026-06 forecast snapshot",
+    "reading the latest forecast snapshot",
     "plotting US, EU27, and Japan sentiment paths",
     "updating weekly nowcast signals"
   ]);
@@ -359,24 +359,15 @@ function renderHeroForecasts() {
 }
 
 function heroForecastPoints(region) {
-  const monthly = region.series
-    .slice(-3)
+  return region.series
+    .slice(-7)
     .map((point) => ({
       label: point.period,
       forecast: point.forecast,
       actual: point.actual,
       forecastOnly: !Number.isFinite(point.actual)
-    }));
-  const weekly = data.weeklyPredictions
-    .filter((point) => point.id === region.id)
-    .slice(-4)
-    .map((point) => ({
-      label: point.label,
-      forecast: point.forecast,
-      actual: null,
-      forecastOnly: true
-    }));
-  return [...monthly, ...weekly].filter((point) => Number.isFinite(point.forecast) || Number.isFinite(point.actual));
+    }))
+    .filter((point) => Number.isFinite(point.forecast) || Number.isFinite(point.actual));
 }
 
 function heroForecastNote(region) {
@@ -384,11 +375,11 @@ function heroForecastNote(region) {
   const latestForecast = [...points].reverse().find((point) => Number.isFinite(point.forecast))?.forecast;
   const latestActual = [...points].reverse().find((point) => Number.isFinite(point.actual))?.actual;
   if (!Number.isFinite(latestForecast) || !Number.isFinite(latestActual)) {
-    return "Prediction path extends beyond the latest released actual.";
+    return "Latest monthly forecast extends beyond the most recent released actual.";
   }
   const gap = latestForecast - latestActual;
   const direction = gap >= 0 ? "above" : "below";
-  return `Forecast is ${Math.abs(gap).toFixed(2)} ${direction} the latest released actual; weekly points extend forward.`;
+  return `Latest monthly forecast is ${Math.abs(gap).toFixed(2)} ${direction} the most recent released actual.`;
 }
 
 function drawHeroForecastChart(region) {
@@ -398,7 +389,7 @@ function drawHeroForecastChart(region) {
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   const width = Math.max(280, Math.floor(rect.width));
-  const height = Math.max(140, Math.floor(rect.height || 150));
+  const height = Math.max(200, Math.floor(rect.height || 210));
   canvas.width = width * dpr;
   canvas.height = height * dpr;
   const ctx = canvas.getContext("2d");
@@ -413,7 +404,7 @@ function drawHeroForecastChart(region) {
   const spread = max - min || 1;
   const yMin = min - spread * 0.18;
   const yMax = max + spread * 0.18;
-  const pad = { top: 12, right: 12, bottom: 28, left: 42 };
+  const pad = { top: 14, right: 14, bottom: 32, left: 44 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const xFor = (index) => pad.left + (index / (points.length - 1)) * plotW;
@@ -465,7 +456,7 @@ function drawHeroForecastChart(region) {
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   points.forEach((point, index) => {
-    if (index === 0 || index === points.length - 1 || point.forecastOnly !== points[index - 1]?.forecastOnly) {
+    if (index === 0 || index === points.length - 1 || index % 2 === 0 || point.forecastOnly !== points[index - 1]?.forecastOnly) {
       ctx.fillText(point.label, xFor(index), pad.top + plotH + 10);
     }
   });

@@ -45,56 +45,108 @@
             </div>
           </div>
         </div>
-        <aside class="hero-forecast-panel" aria-labelledby="hero-forecast-title">
-          <div class="hero-forecast-head">
-            <div>
-              <p class="eyebrow">Latest nowcast</p>
-              <h2 id="hero-forecast-title">US, EU27, and Japan index paths</h2>
-            </div>
-            <div class="hero-legend" aria-label="Chart legend">
-              <span><i class="actual-dot"></i> Actual</span>
-              <span><i class="forecast-dot"></i> Forecast</span>
-            </div>
+        <aside class="map-card" aria-labelledby="map-title">
+          <div class="map-card-head">
+            <p class="eyebrow">Coverage map</p>
+            <h2 id="map-title">Three regional representatives</h2>
+            <p class="map-card-note">Latest snapshot values are pinned to each representative market.</p>
           </div>
-          <div class="hero-forecast-grid" id="hero-forecast-grid">
-            <article class="hero-forecast-card" data-region-card="us">
-              <div class="hero-card-top">
-                <div>
-                  <span>US</span>
-                  <strong data-hero-value="us">--</strong>
-                </div>
-                <small data-hero-period="us">--</small>
-              </div>
-              <canvas class="hero-region-chart" data-hero-chart="us" height="150" aria-label="US confidence actual and forecast path"></canvas>
-              <p data-hero-note="us">--</p>
-            </article>
-            <article class="hero-forecast-card" data-region-card="eu">
-              <div class="hero-card-top">
-                <div>
-                  <span>EU27</span>
-                  <strong data-hero-value="eu">--</strong>
-                </div>
-                <small data-hero-period="eu">--</small>
-              </div>
-              <canvas class="hero-region-chart" data-hero-chart="eu" height="150" aria-label="EU27 confidence actual and forecast path"></canvas>
-              <p data-hero-note="eu">--</p>
-            </article>
-            <article class="hero-forecast-card" data-region-card="jp">
-              <div class="hero-card-top">
-                <div>
-                  <span>Japan</span>
-                  <strong data-hero-value="jp">--</strong>
-                </div>
-                <small data-hero-period="jp">--</small>
-              </div>
-              <canvas class="hero-region-chart" data-hero-chart="jp" height="150" aria-label="Japan confidence actual and forecast path"></canvas>
-              <p data-hero-note="jp">--</p>
-            </article>
-          </div>
+          <svg class="world-map" viewBox="0 0 760 390" role="img" aria-label="World map showing US, EU27, and Japan coverage">
+            <defs>
+              <linearGradient id="ocean-wash" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f9fbf8"/>
+                <stop offset="0.52" stop-color="#fff7ef"/>
+                <stop offset="1" stop-color="#f2f6f0"/>
+              </linearGradient>
+              <linearGradient id="land-wash" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f0eee7"/>
+                <stop offset="1" stop-color="#dedbd2"/>
+              </linearGradient>
+              <filter id="map-soft-shadow" x="-15%" y="-15%" width="130%" height="130%">
+                <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#2c281f" flood-opacity="0.12"/>
+              </filter>
+              <filter id="pin-glow" x="-80%" y="-80%" width="260%" height="260%">
+                <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#d64f2a" flood-opacity="0.35"/>
+              </filter>
+            </defs>
+            <rect class="map-ocean" x="14" y="18" width="732" height="354" rx="26"/>
+            <image class="map-land-svg" href="./assets/world-map.svg" x="18" y="24" width="724" height="330" preserveAspectRatio="xMidYMid meet"/>
+            <path class="map-arc map-arc-back" d="M205 121C292 64 338 65 408 104S538 139 630 123"/>
+            <path class="map-arc" d="M205 121C292 68 338 70 408 104S538 133 630 123"/>
+            <g class="map-pin marker-us" style="--delay: 0s">
+              <circle class="map-pulse" cx="205" cy="121" r="26"/>
+              <circle class="map-node" cx="205" cy="121" r="13"/>
+              <rect class="map-label-card" x="150" y="150" width="110" height="58" rx="14"/>
+              <text class="map-code" x="205" y="173">US</text>
+              <text class="map-value" id="map-us-value" x="205" y="196">--</text>
+            </g>
+            <g class="map-pin marker-eu" style="--delay: .45s">
+              <circle class="map-pulse" cx="408" cy="104" r="26"/>
+              <circle class="map-node" cx="408" cy="104" r="13"/>
+              <rect class="map-label-card" x="350" y="132" width="116" height="58" rx="14"/>
+              <text class="map-code" x="408" y="155">EU27</text>
+              <text class="map-value" id="map-eu-value" x="408" y="178">--</text>
+            </g>
+            <g class="map-pin marker-jp" style="--delay: .9s">
+              <circle class="map-pulse" cx="630" cy="123" r="26"/>
+              <circle class="map-node" cx="630" cy="123" r="13"/>
+              <rect class="map-label-card" x="584" y="151" width="92" height="58" rx="14"/>
+              <text class="map-code" x="630" y="174">JP</text>
+              <text class="map-value" id="map-jp-value" x="630" y="197">--</text>
+            </g>
+          </svg>
         </aside>
       </section>
 
-      <section class="prediction-section weekly-section explorer-section" id="latest" aria-labelledby="weekly-title">
+      <section class="hero-forecast-panel monthly-forecast-section" id="latest" aria-labelledby="hero-forecast-title">
+        <div class="hero-forecast-head">
+          <div>
+            <p class="eyebrow">Monthly forecast</p>
+            <h2 id="hero-forecast-title">US, EU27, and Japan index paths</h2>
+          </div>
+          <div class="hero-legend" aria-label="Chart legend">
+            <span><i class="line-key actual-line"></i> Actual solid line</span>
+            <span><i class="line-key forecast-line"></i> Forecast dashed line</span>
+          </div>
+        </div>
+        <div class="hero-forecast-grid" id="hero-forecast-grid">
+          <article class="hero-forecast-card" data-region-card="us">
+            <div class="hero-card-top">
+              <div>
+                <span>US</span>
+                <strong data-hero-value="us">--</strong>
+              </div>
+              <small data-hero-period="us">--</small>
+            </div>
+            <canvas class="hero-region-chart" data-hero-chart="us" height="210" aria-label="US confidence actual and forecast path"></canvas>
+            <p data-hero-note="us">--</p>
+          </article>
+          <article class="hero-forecast-card" data-region-card="eu">
+            <div class="hero-card-top">
+              <div>
+                <span>EU27</span>
+                <strong data-hero-value="eu">--</strong>
+              </div>
+              <small data-hero-period="eu">--</small>
+            </div>
+            <canvas class="hero-region-chart" data-hero-chart="eu" height="210" aria-label="EU27 confidence actual and forecast path"></canvas>
+            <p data-hero-note="eu">--</p>
+          </article>
+          <article class="hero-forecast-card" data-region-card="jp">
+            <div class="hero-card-top">
+              <div>
+                <span>Japan</span>
+                <strong data-hero-value="jp">--</strong>
+              </div>
+              <small data-hero-period="jp">--</small>
+            </div>
+            <canvas class="hero-region-chart" data-hero-chart="jp" height="210" aria-label="Japan confidence actual and forecast path"></canvas>
+            <p data-hero-note="jp">--</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="prediction-section weekly-section explorer-section" id="forecast-explorer" aria-labelledby="weekly-title">
         <div class="section-head compact">
           <div>
             <p class="eyebrow">Forecast explorer</p>
