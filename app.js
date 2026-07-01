@@ -366,7 +366,7 @@ function latestWeeklyForecast(regionId) {
 function heroForecastPoints(region) {
   const actualMonthly = region.series
     .filter((point) => Number.isFinite(point.actual))
-    .slice(-4)
+    .slice(-2)
     .map((point) => ({
       label: point.period,
       date: monthDate(point.period),
@@ -376,7 +376,6 @@ function heroForecastPoints(region) {
     }));
   const weeklyForecast = data.weeklyPredictions
     .filter((point) => point.id === region.id)
-    .slice(-4)
     .map((point) => ({
       label: point.label,
       date: weeklyDate(point),
@@ -693,7 +692,7 @@ function monthlyForExplorer() {
 }
 
 function newsForExplorer(region, cadence) {
-  return data.forecastNews.filter((item) => item.id === region.id && item.cadence === cadence);
+  return data.forecastNews.filter((item) => item.id === region.id && item.cadence === cadence && item.headline);
 }
 
 function renderForecastNews(region, cadence, fallbackPeriod) {

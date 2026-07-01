@@ -18,8 +18,11 @@ from consumer_pipeline.orchestrator import ConsumerPipeline
 
 
 SITE_DATA = ROOT / "data" / "consumersim_site_data.csv"
+DRIVER_EVENTS = ROOT / "data" / "forecast_driver_events.csv"
 DEFAULT_TIMEZONE = ZoneInfo("Asia/Shanghai")
 REGIONS = ("us", "eu", "jp")
+WEEKLY_POINT_COUNT = 9
+DRIVER_ROWS_PER_CADENCE = 3
 
 REGION_LABELS = {
     "us": "US",
@@ -78,7 +81,7 @@ def read_rows(path: Path) -> tuple[list[dict[str, str]], list[str]]:
 def write_rows(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -100,7 +103,7 @@ def weekly_cutoffs(as_of: date, target_month: str) -> list[date]:
     year, month = (int(part) for part in target_month.split("-"))
     month_end = date(year, month, calendar.monthrange(year, month)[1])
     effective_as_of = min(as_of, month_end)
-    return [effective_as_of - timedelta(days=7 * offset) for offset in range(3, -1, -1)]
+    return [effective_as_of - timedelta(days=7 * offset) for offset in range(WEEKLY_POINT_COUNT - 1, -1, -1)]
 
 
 def update_rows(
@@ -110,6 +113,9 @@ def update_rows(
     monthly_results: dict[str, Any],
     weekly_results: dict[str, list[Any]],
 ) -> None:
+    rows[:] = ensure_weekly_rows(rows)
+    rows[:] = ensure_driver_rows(rows)
+    curated_driver_events = read_driver_events(DRIVER_EVENTS)
     snapshot = as_of.isoformat()
     period = month_label(target_month)
     prior_period = previous_month_label(target_month)
@@ -136,13 +142,47 @@ def update_rows(
         elif record_type == "weekly_prediction" and region in REGIONS:
             update_weekly_prediction(row, region, target_month, weekly_results[region], weekly_values[region])
         elif record_type == "forecast_news" and region in REGIONS:
-            update_driver_note(row, region, period, monthly_results[region])
+            update_driver_note(row, region, period, monthly_results[region], curated_driver_events)
         elif record_type == "region_summary" and region in REGIONS:
             update_region_summary(row, region, period, monthly_results[region], monthly_values[region])
         elif record_type == "series" and region in REGIONS and int(row.get("sort_order") or 0) == latest_series_sort[region]:
             row["period"] = period
             row["forecast"] = f"{monthly_values[region]:.2f}"
             row["actual"] = ""
+
+
+def ensure_weekly_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    return ensure_repeated_rows(rows, "weekly_prediction", WEEKLY_POINT_COUNT)
+
+
+def ensure_driver_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    return ensure_repeated_rows(rows, "forecast_news", DRIVER_ROWS_PER_CADENCE * 2)
+
+
+def ensure_repeated_rows(rows: list[dict[str, str]], record_type: str, count: int) -> list[dict[str, str]]:
+    if not rows:
+        return rows
+    fieldnames = list(rows[0])
+    output: list[dict[str, str]] = []
+    emitted: set[str] = set()
+    for row in rows:
+        region = row.get("region")
+        if row.get("record_type") == record_type and region in REGIONS:
+            if region in emitted:
+                continue
+            template = row
+            for sort_order in range(1, count + 1):
+                copy = {field: template.get(field, "") for field in fieldnames}
+                copy["record_type"] = record_type
+                copy["region"] = region
+                copy["sort_order"] = str(sort_order)
+                if record_type == "forecast_news":
+                    copy["key"] = "weekly" if sort_order <= DRIVER_ROWS_PER_CADENCE else "monthly"
+                output.append(copy)
+            emitted.add(region)
+        else:
+            output.append(row)
+    return output
 
 
 def update_meta(row: dict[str, str], as_of: date, next_update: str) -> None:
@@ -206,24 +246,97 @@ def update_weekly_prediction(
     )
 
 
-def update_driver_note(row: dict[str, str], region: str, period: str, result: Any) -> None:
+def read_driver_events(path: Path) -> dict[tuple[str, str], list[dict[str, str]]]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    events: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for row in rows:
+        region = row.get("region", "")
+        cadence = row.get("cadence", "")
+        if region not in REGIONS or cadence not in {"weekly", "monthly"}:
+            continue
+        events.setdefault((region, cadence), []).append(row)
+    for key, items in events.items():
+        items.sort(key=lambda item: int(item.get("sort_order") or 0))
+    return events
+
+
+def update_driver_note(
+    row: dict[str, str],
+    region: str,
+    period: str,
+    result: Any,
+    curated_driver_events: dict[tuple[str, str], list[dict[str, str]]],
+) -> None:
     cadence = row.get("key") or "weekly"
-    environment = result.environment
+    sort_order = int(row.get("sort_order") or 1)
+    cadence_index = (sort_order - 1) % DRIVER_ROWS_PER_CADENCE
+    events = curated_driver_events.get((region, cadence)) or driver_events(result.environment)
+    if cadence_index >= len(events):
+        clear_driver_note(row)
+        return
+    event = events[cadence_index]
     row.update(
         {
-            "label": "ConsumerSim information environment update",
-            "market": "ConsumerSim pipeline",
+            "label": event.get("headline", ""),
+            "market": event.get("source", ""),
             "period": period,
-            "week_label": period,
-            "signal": "News/Indicators",
-            "interpretation": (
-                f"{REGION_LABELS[region]} {cadence} run used {environment.get('news_count', 0)} news items "
-                f"and {environment.get('indicator_count', 0)} indicator observations; "
-                f"combined signal {environment.get('combined_score', 0.0):+.3f}."
-            ),
+            "week_label": event.get("event_period") or period,
+            "signal": event.get("tag", ""),
+            "interpretation": event.get("summary", ""),
+            "note": event.get("url", ""),
+        }
+    )
+
+
+def clear_driver_note(row: dict[str, str]) -> None:
+    row.update(
+        {
+            "label": "",
+            "market": "",
+            "period": "",
+            "week_label": "",
+            "signal": "",
+            "interpretation": "",
             "note": "",
         }
     )
+
+
+def driver_events(environment: dict[str, Any]) -> list[dict[str, str]]:
+    events: list[dict[str, str]] = []
+    for item in environment.get("news_items", []):
+        published = str(item.get("published_at", ""))[:10]
+        sentiment = float(item.get("sentiment", 0.0))
+        relevance = float(item.get("relevance", 0.0))
+        events.append(
+            {
+                "date": published,
+                "tag": "News",
+                "source": "Input news feed",
+                "headline": str(item.get("title", "")),
+                "summary": f"Published {published}; sentiment {sentiment:+.2f}, relevance {relevance:.2f}.",
+                "url": "",
+            }
+        )
+    for item in environment.get("indicators", []):
+        observed = str(item.get("observed_at", ""))[:10]
+        z_score = float(item.get("z_score", 0.0))
+        weight = float(item.get("weight", 0.0))
+        events.append(
+            {
+                "date": observed,
+                "tag": "Indicator",
+                "source": "Input indicators",
+                "headline": str(item.get("name", "")).replace("_", " ").title(),
+                "summary": f"Observed {observed}; z-score {z_score:+.2f}, model weight {weight:.2f}.",
+                "url": "",
+            }
+        )
+    events = [event for event in events if event["headline"]]
+    return sorted(events, key=lambda event: event["date"], reverse=True)[:DRIVER_ROWS_PER_CADENCE]
 
 
 def update_region_summary(row: dict[str, str], region: str, period: str, result: Any, value: float) -> None:
