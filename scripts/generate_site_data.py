@@ -5,9 +5,10 @@ import calendar
 import csv
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -17,6 +18,7 @@ from consumer_pipeline.orchestrator import ConsumerPipeline
 
 
 SITE_DATA = ROOT / "data" / "consumersim_site_data.csv"
+DEFAULT_TIMEZONE = ZoneInfo("Asia/Shanghai")
 REGIONS = ("us", "eu", "jp")
 
 REGION_LABELS = {
@@ -39,7 +41,7 @@ DISPLAY_OFFSETS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Regenerate static ConsumerSim site data.")
     parser.add_argument("--month", help="Target month in YYYY-MM. Defaults to the as-of month.")
-    parser.add_argument("--as-of", help="Information cutoff in YYYY-MM-DD. Defaults to today in UTC.")
+    parser.add_argument("--as-of", help="Information cutoff in YYYY-MM-DD. Defaults to today in Asia/Shanghai.")
     parser.add_argument("--template", type=Path, default=SITE_DATA, help="Existing site CSV to use as template.")
     parser.add_argument("--output", type=Path, default=SITE_DATA, help="CSV path to write.")
     return parser.parse_args()
@@ -47,7 +49,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    as_of = date.fromisoformat(args.as_of) if args.as_of else datetime.now(timezone.utc).date()
+    as_of = date.fromisoformat(args.as_of) if args.as_of else datetime.now(DEFAULT_TIMEZONE).date()
     target_month = args.month or as_of.strftime("%Y-%m")
 
     rows, fieldnames = read_rows(args.template)

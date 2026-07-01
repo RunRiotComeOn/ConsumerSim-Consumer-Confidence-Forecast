@@ -9,7 +9,7 @@ on:
         description: Target month in YYYY-MM. Defaults to the as-of month.
         required: false
       as_of:
-        description: Information cutoff in YYYY-MM-DD. Defaults to today's UTC date.
+        description: Information cutoff in YYYY-MM-DD. Defaults to today's Asia/Shanghai date.
         required: false
   schedule:
     - cron: "0 6 * * 1"
