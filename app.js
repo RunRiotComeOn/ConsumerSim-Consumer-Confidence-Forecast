@@ -369,6 +369,7 @@ function heroForecastPoints(region) {
     .slice(-4)
     .map((point) => ({
       label: point.period,
+      date: monthDate(point.period),
       forecast: null,
       actual: point.actual,
       forecastOnly: false
@@ -378,6 +379,7 @@ function heroForecastPoints(region) {
     .slice(-4)
     .map((point) => ({
       label: point.label,
+      date: weeklyDate(point),
       forecast: point.forecast,
       actual: null,
       forecastOnly: true
@@ -385,6 +387,27 @@ function heroForecastPoints(region) {
   return [...actualMonthly, ...weeklyForecast].filter(
     (point) => Number.isFinite(point.forecast) || Number.isFinite(point.actual)
   );
+}
+
+function monthDate(label) {
+  const match = /^([A-Za-z]{3})-(\d{2})$/.exec(label || "");
+  if (!match) return null;
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].indexOf(match[1]);
+  if (month < 0) return null;
+  return new Date(2000 + Number(match[2]), month + 1, 0);
+}
+
+function weeklyDate(point) {
+  const targetMatch = /^([A-Za-z]{3})-(\d{2})$/.exec(point.period || "");
+  const weekMatch = /^([A-Za-z]{3}) W\d+$/.exec(point.label || "");
+  if (!targetMatch || !weekMatch || !Number.isFinite(point.cutoffDay)) return null;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const targetMonth = months.indexOf(targetMatch[1]);
+  const weekMonth = months.indexOf(weekMatch[1]);
+  if (targetMonth < 0 || weekMonth < 0) return null;
+  let year = 2000 + Number(targetMatch[2]);
+  if (targetMonth === 0 && weekMonth === 11) year -= 1;
+  return new Date(year, weekMonth, point.cutoffDay);
 }
 
 function heroForecastNote(region) {
@@ -424,9 +447,17 @@ function drawHeroForecastChart(region) {
   const pad = { top: 14, right: 14, bottom: 32, left: 44 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
-  const xFor = (index) => pad.left + (index / (points.length - 1)) * plotW;
+  const datedPoints = points
+    .map((point) => ({
+      ...point,
+      time: point.date instanceof Date && !Number.isNaN(point.date.valueOf()) ? point.date.valueOf() : null
+    }))
+    .filter((point) => Number.isFinite(point.time));
+  const minTime = Math.min(...datedPoints.map((point) => point.time));
+  const maxTime = Math.max(...datedPoints.map((point) => point.time));
+  const timeSpread = maxTime - minTime || 1;
+  const xForTime = (time) => pad.left + ((time - minTime) / timeSpread) * plotW;
   const yFor = (value) => pad.top + ((yMax - value) / (yMax - yMin)) * plotH;
-  const splitIndex = Math.max(0, points.findIndex((point) => point.forecastOnly));
 
   ctx.font = "11px Consolas, monospace";
   ctx.lineWidth = 1;
@@ -445,8 +476,9 @@ function drawHeroForecastChart(region) {
     ctx.fillText(value.toFixed(region.id === "eu" ? 1 : 0), pad.left - 8, y);
   }
 
-  if (splitIndex > 0) {
-    const x = xFor(splitIndex - 0.5);
+  const firstForecast = datedPoints.find((point) => point.forecastOnly);
+  if (firstForecast) {
+    const x = xForTime(firstForecast.time);
     ctx.save();
     ctx.setLineDash([4, 5]);
     ctx.strokeStyle = "rgba(16, 16, 16, 0.24)";
@@ -457,11 +489,11 @@ function drawHeroForecastChart(region) {
     ctx.restore();
   }
 
-  const actualPoints = points
-    .map((point, index) => (Number.isFinite(point.actual) ? [xFor(index), yFor(point.actual)] : null))
+  const actualPoints = datedPoints
+    .map((point) => (Number.isFinite(point.actual) ? [xForTime(point.time), yFor(point.actual)] : null))
     .filter(Boolean);
-  const forecastPoints = points
-    .map((point, index) => (Number.isFinite(point.forecast) ? [xFor(index), yFor(point.forecast)] : null))
+  const forecastPoints = datedPoints
+    .map((point) => (Number.isFinite(point.forecast) ? [xForTime(point.time), yFor(point.forecast)] : null))
     .filter(Boolean);
 
   drawLine(ctx, actualPoints, "#101010", 2.3);
@@ -472,10 +504,10 @@ function drawHeroForecastChart(region) {
   ctx.fillStyle = "#6b6860";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  points.forEach((point, index) => {
-    if (index === 0 || index === points.length - 1 || index % 2 === 0 || point.forecastOnly !== points[index - 1]?.forecastOnly) {
-      ctx.fillText(point.label, xFor(index), pad.top + plotH + 10);
-    }
+  const actualLabels = datedPoints.filter((point) => !point.forecastOnly);
+  const labelPoints = [actualLabels[0], actualLabels.at(-1), datedPoints.at(-1)].filter(Boolean);
+  new Map(labelPoints.map((point) => [point.label, point])).forEach((point) => {
+    ctx.fillText(point.label, xForTime(point.time), pad.top + plotH + 10);
   });
 }
 
