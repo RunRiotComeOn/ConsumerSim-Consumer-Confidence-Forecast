@@ -21,14 +21,28 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TIMEZONE = ZoneInfo("Asia/Shanghai")
 REGIONS = ("us", "eu", "jp")
-NEWS_LIMIT = 8
+NEWS_LIMIT = 10
 DRIVER_LIMIT = 3
 BING_ENDPOINT = "https://api.bing.microsoft.com/v7.0/news/search"
 
 REGION_QUERIES = {
-    "us": '("US consumer sentiment" OR "United States consumer confidence" OR "Michigan consumer sentiment") inflation jobs households',
-    "eu": '("euro area consumer confidence" OR "EU consumer confidence" OR "European consumer confidence") inflation households employment',
-    "jp": '("Japan consumer confidence" OR "Japanese consumer confidence") wages employment households inflation',
+    "us": [
+        '("US consumer sentiment" OR "United States consumer confidence" OR "Michigan consumer sentiment") inflation jobs households',
+        "US households consumer spending inflation wages confidence",
+        "United States retail sales jobs inflation consumer confidence",
+    ],
+    "eu": [
+        '("euro area consumer confidence" OR "EU consumer confidence" OR "European consumer confidence") inflation households employment',
+        "euro area consumer confidence inflation employment households",
+        "Eurozone household confidence inflation retail sales employment",
+        "European consumers inflation wages confidence economy",
+    ],
+    "jp": [
+        '("Japan consumer confidence" OR "Japanese consumer confidence") wages employment households inflation',
+        "Japan consumer confidence wages inflation households",
+        "Japanese households inflation wages consumer sentiment",
+        "Japan economy consumer spending wages inflation confidence",
+    ],
 }
 
 REGION_LABELS = {
@@ -49,6 +63,11 @@ NEGATIVE_WORDS = {
     "weak", "weaker", "worry",
 }
 
+DRIVER_TERMS = (
+    "consumer", "confidence", "sentiment", "inflation", "price", "cost", "wage", "jobs",
+    "employment", "household", "spending", "retail", "sales", "demand",
+)
+
 
 @dataclass(frozen=True)
 class NewsEvent:
@@ -64,7 +83,7 @@ class NewsEvent:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch live information inputs for ConsumerSim site updates.")
     parser.add_argument("--as-of", help="Information cutoff in YYYY-MM-DD. Defaults to today in Asia/Shanghai.")
-    parser.add_argument("--lookback-days", type=int, default=35)
+    parser.add_argument("--lookback-days", type=int, default=75)
     parser.add_argument("--news-output-root", type=Path, default=ROOT / "examples")
     parser.add_argument("--driver-output", type=Path, default=ROOT / "data" / "forecast_driver_events.csv")
     parser.add_argument("--bing-endpoint", default=os.getenv("BING_NEWS_ENDPOINT", BING_ENDPOINT))
@@ -110,54 +129,62 @@ def fetch_region_events(region: str, as_of: date, lookback_days: int, bing_key: 
 
 
 def fetch_bing_events(region: str, as_of: date, lookback_days: int, api_key: str, endpoint: str) -> list[NewsEvent]:
-    query = REGION_QUERIES[region]
     since = as_of - timedelta(days=lookback_days)
-    params = {
-        "q": query,
-        "count": str(NEWS_LIMIT),
-        "sortBy": "Date",
-        "freshness": "Month",
-        "textFormat": "Raw",
-        "mkt": "en-US",
-    }
-    request = urllib.request.Request(
-        f"{endpoint}?{urllib.parse.urlencode(params)}",
-        headers={"Ocp-Apim-Subscription-Key": api_key, "User-Agent": "ConsumerSimBot/1.0"},
-    )
-    with urllib.request.urlopen(request, timeout=20) as response:
-        payload = json.loads(response.read().decode("utf-8"))
     events: list[NewsEvent] = []
-    for item in payload.get("value", []):
-        published = parse_date(str(item.get("datePublished") or "")) or as_of
-        if published < since or published > as_of:
+    for query in REGION_QUERIES[region]:
+        params = {
+            "q": query,
+            "count": str(NEWS_LIMIT),
+            "sortBy": "Date",
+            "freshness": "Month",
+            "textFormat": "Raw",
+            "mkt": "en-US",
+        }
+        request = urllib.request.Request(
+            f"{endpoint}?{urllib.parse.urlencode(params)}",
+            headers={"Ocp-Apim-Subscription-Key": api_key, "User-Agent": "ConsumerSimBot/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            print(f"warning: Bing query failed for {region}: {exc}", file=sys.stderr)
             continue
-        source = ((item.get("provider") or [{}])[0].get("name") or "Bing News").strip()
-        title = clean_title(str(item.get("name") or ""))
-        if title and region_matches(title, source, region):
-            events.append(make_event(region, title, source, str(item.get("url") or ""), published))
-    return unique_events(events)
+        for item in payload.get("value", []):
+            published = parse_date(str(item.get("datePublished") or "")) or as_of
+            if published < since or published > as_of:
+                continue
+            source = ((item.get("provider") or [{}])[0].get("name") or "Bing News").strip()
+            title = clean_title(str(item.get("name") or ""))
+            if title and region_matches(title, source, region):
+                events.append(make_event(region, title, source, str(item.get("url") or ""), published))
+    return unique_events(events)[:NEWS_LIMIT]
 
 
 def fetch_rss_events(region: str, as_of: date, lookback_days: int) -> list[NewsEvent]:
-    query = REGION_QUERIES[region]
     since = as_of - timedelta(days=lookback_days)
-    params = urllib.parse.urlencode({"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"})
-    request = urllib.request.Request(
-        f"https://news.google.com/rss/search?{params}",
-        headers={"User-Agent": "ConsumerSimBot/1.0"},
-    )
-    with urllib.request.urlopen(request, timeout=20) as response:
-        root = ET.fromstring(response.read())
     events: list[NewsEvent] = []
-    for item in root.findall("./channel/item"):
-        title = clean_title(item.findtext("title") or "")
-        link = item.findtext("link") or ""
-        source = item.findtext("source") or source_from_title(title) or "Google News"
-        published = parse_date(item.findtext("pubDate") or "") or as_of
-        if published < since or published > as_of:
+    for query in REGION_QUERIES[region]:
+        params = urllib.parse.urlencode({"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"})
+        request = urllib.request.Request(
+            f"https://news.google.com/rss/search?{params}",
+            headers={"User-Agent": "ConsumerSimBot/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                root = ET.fromstring(response.read())
+        except (urllib.error.URLError, ET.ParseError, TimeoutError, ValueError) as exc:
+            print(f"warning: RSS query failed for {region}: {exc}", file=sys.stderr)
             continue
-        if title and region_matches(title, source, region):
-            events.append(make_event(region, title, source, link, published))
+        for item in root.findall("./channel/item"):
+            title = clean_title(item.findtext("title") or "")
+            link = item.findtext("link") or ""
+            source = item.findtext("source") or source_from_title(title) or "Google News"
+            published = parse_date(item.findtext("pubDate") or "") or as_of
+            if published < since or published > as_of:
+                continue
+            if title and region_matches(title, source, region):
+                events.append(make_event(region, title, source, link, published))
     return unique_events(events)[:NEWS_LIMIT]
 
 
@@ -240,8 +267,13 @@ def write_driver_events(path: Path, events_by_region: dict[str, list[NewsEvent]]
     rows: list[dict[str, str]] = []
     for region in REGIONS:
         events = events_by_region.get(region, [])
-        weekly = sorted(events, key=lambda event: event.published_at, reverse=True)[:DRIVER_LIMIT]
-        monthly = sorted(events, key=lambda event: (abs(event.sentiment) * event.relevance, event.published_at), reverse=True)[:DRIVER_LIMIT]
+        driver_events = prioritize_driver_events(events)
+        weekly = sorted(driver_events, key=lambda event: (event.published_at, event.relevance), reverse=True)[:DRIVER_LIMIT]
+        monthly = sorted(
+            driver_events,
+            key=lambda event: (abs(event.sentiment) * event.relevance, event.relevance, event.published_at),
+            reverse=True,
+        )[:DRIVER_LIMIT]
         for cadence, selected in (("weekly", weekly), ("monthly", monthly)):
             for index, event in enumerate(selected, 1):
                 rows.append({
@@ -320,6 +352,11 @@ def event_tag(event: NewsEvent) -> str:
     if event.sentiment > 0.15:
         return "Support"
     return "News"
+
+
+def prioritize_driver_events(events: list[NewsEvent]) -> list[NewsEvent]:
+    focused = [event for event in events if any(term in event.title.lower() for term in DRIVER_TERMS)]
+    return focused or events
 
 
 def driver_summary(event: NewsEvent, label: str) -> str:
