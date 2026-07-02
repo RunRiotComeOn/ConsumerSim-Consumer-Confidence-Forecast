@@ -27,9 +27,6 @@ concurrency:
 jobs:
   update-and-deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
       CONSUMERSIM_MODEL_API_KEY: ${{ secrets.CONSUMERSIM_MODEL_API_KEY }}
       CONSUMERSIM_BING_NEWS_API_KEY: ${{ secrets.CONSUMERSIM_BING_NEWS_API_KEY || secrets.BING_NEWS_API_KEY }}
