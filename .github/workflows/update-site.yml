@@ -32,9 +32,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     env:
       CONSUMERSIM_MODEL_API_KEY: ${{ secrets.CONSUMERSIM_MODEL_API_KEY }}
+      CONSUMERSIM_BING_NEWS_API_KEY: ${{ secrets.CONSUMERSIM_BING_NEWS_API_KEY || secrets.BING_NEWS_API_KEY }}
       CONSUMERSIM_MODEL_ENDPOINT: ${{ vars.CONSUMERSIM_MODEL_ENDPOINT }}
       CONSUMERSIM_MODEL_NAME: ${{ vars.CONSUMERSIM_MODEL_NAME }}
-      CONSUMERSIM_PREDICTION_PROVIDER: ${{ vars.CONSUMERSIM_PREDICTION_PROVIDER || 'local' }}
+      CONSUMERSIM_PREDICTION_PROVIDER: ${{ vars.CONSUMERSIM_PREDICTION_PROVIDER }}
+      CONSUMERSIM_POPULATION_SIZE: ${{ vars.CONSUMERSIM_POPULATION_SIZE }}
+      CONSUMERSIM_CORE_RATIO: ${{ vars.CONSUMERSIM_CORE_RATIO }}
 
     steps:
       - name: Check out repository
@@ -52,9 +55,29 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
+      - name: Fetch live information inputs
+        shell: bash
+        run: |
+          args=()
+          if [ -n "${{ inputs.as_of }}" ]; then
+            args+=(--as-of "${{ inputs.as_of }}")
+          fi
+          python scripts/fetch_information_inputs.py "${args[@]}"
+
       - name: Generate site data
         shell: bash
         run: |
+          if [ -n "${CONSUMERSIM_MODEL_API_KEY}" ]; then
+            export CONSUMERSIM_PREDICTION_PROVIDER="${CONSUMERSIM_PREDICTION_PROVIDER:-openai_compatible}"
+            export CONSUMERSIM_MODEL_ENDPOINT="${CONSUMERSIM_MODEL_ENDPOINT:-https://api.openai.com/v1/chat/completions}"
+            export CONSUMERSIM_MODEL_NAME="${CONSUMERSIM_MODEL_NAME:-gpt-4o-mini}"
+            export CONSUMERSIM_POPULATION_SIZE="${CONSUMERSIM_POPULATION_SIZE:-240}"
+            export CONSUMERSIM_CORE_RATIO="${CONSUMERSIM_CORE_RATIO:-0.025}"
+            echo "Using external OpenAI-compatible predictor: ${CONSUMERSIM_MODEL_NAME}"
+          else
+            export CONSUMERSIM_PREDICTION_PROVIDER="local"
+            echo "::warning::CONSUMERSIM_MODEL_API_KEY is not configured; using local predictor."
+          fi
           args=()
           if [ -n "${{ inputs.month }}" ]; then
             args+=(--month "${{ inputs.month }}")
@@ -67,13 +90,13 @@ jobs:
       - name: Commit updated data
         shell: bash
         run: |
-          if git diff --quiet -- data/consumersim_site_data.csv; then
+          if git diff --quiet -- data/consumersim_site_data.csv data/forecast_driver_events.csv examples/us/news.jsonl examples/us/indicators.csv examples/eu/news.jsonl examples/eu/indicators.csv examples/jp/news.jsonl examples/jp/indicators.csv; then
             echo "No site data changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/consumersim_site_data.csv
+          git add data/consumersim_site_data.csv data/forecast_driver_events.csv examples/us/news.jsonl examples/us/indicators.csv examples/eu/news.jsonl examples/eu/indicators.csv examples/jp/news.jsonl examples/jp/indicators.csv
           git commit -m "Update ConsumerSim site data"
           git push
 

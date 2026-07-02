@@ -65,7 +65,7 @@ class OpenAICompatibleCorePredictor:
 
     def _request(self, consumer: Consumer, environment: InformationEnvironment) -> dict[str, str]:
         prompt = {
-            "task": "Return one of positive, neutral, negative for every survey question.",
+            "task": "Return a JSON object with one of positive, neutral, negative for every survey question.",
             "region": self.profile.region.value,
             "consumer": {
                 "age_group": consumer.age_group,

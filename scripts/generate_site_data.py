@@ -88,6 +88,10 @@ def write_rows(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) ->
 
 def run_region(region: str, target_month: str, as_of: str) -> Any:
     config = load_config(ROOT / "configs" / f"{region}.yaml")
+    if os.getenv("CONSUMERSIM_POPULATION_SIZE"):
+        config["population"]["size"] = int(os.environ["CONSUMERSIM_POPULATION_SIZE"])
+    if os.getenv("CONSUMERSIM_CORE_RATIO"):
+        config["population"]["core_ratio"] = float(os.environ["CONSUMERSIM_CORE_RATIO"])
     provider = os.getenv("CONSUMERSIM_PREDICTION_PROVIDER", "").strip().lower()
     if provider:
         config["prediction"]["provider"] = provider

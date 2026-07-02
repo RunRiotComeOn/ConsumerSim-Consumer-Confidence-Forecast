@@ -1,3 +1,4 @@
 observed_at,name,z_score,weight
-2026-06-03,inflation,-0.40,1.00
-2026-06-10,employment,0.20,1.00
+2026-07-02,news_sentiment_balance,0.0000,1.00
+2026-07-02,news_coverage_intensity,-2.0000,0.65
+2026-07-02,negative_news_pressure,0.0000,0.80

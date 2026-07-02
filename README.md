@@ -224,9 +224,42 @@ The site reads `data/consumersim_site_data.csv` at runtime. To refresh the weekl
 python scripts/generate_site_data.py --month 2026-07 --as-of 2026-07-01
 ```
 
-If `--month` or `--as-of` is omitted, the script uses the current UTC date and its month. The script runs the Python backend pipeline for US, EU, and Japan, updates the CSV used by the frontend, and leaves generated runtime artifacts under `outputs/`.
+If `--month` or `--as-of` is omitted, the script uses the current Asia/Shanghai date and its month. The script runs the Python backend pipeline for US, EU, and Japan, updates the CSV used by the frontend, and leaves generated runtime artifacts under `outputs/`.
+
+Before regenerating the site data, refresh the live information inputs:
+
+```powershell
+python scripts/fetch_information_inputs.py --as-of 2026-07-01
+```
+
+The fetch step uses `CONSUMERSIM_BING_NEWS_API_KEY` or `BING_NEWS_API_KEY` when available. Without a Bing key, it falls back to public news RSS, filters by region, and writes:
+
+- `examples/<region>/news.jsonl`
+- `examples/<region>/indicators.csv`
+- `data/forecast_driver_events.csv`
+
+These files are then consumed by `scripts/generate_site_data.py`, so weekly forecasts move when new fetched events enter the information cutoff window.
 
 ## 10. GitHub Actions Deployment
+
+The deployment workflow now does both backend and frontend work:
+
+1. Run tests.
+2. Fetch live information inputs.
+3. Generate weekly/monthly forecast data.
+4. Commit updated data inputs and site CSV.
+5. Deploy the static site to GitHub Pages.
+
+For external model inference, configure these GitHub repository secrets/variables:
+
+- Secret `CONSUMERSIM_MODEL_API_KEY`: required to enable external model calls.
+- Optional variable `CONSUMERSIM_MODEL_ENDPOINT`: defaults to `https://api.openai.com/v1/chat/completions`.
+- Optional variable `CONSUMERSIM_MODEL_NAME`: defaults to `gpt-4o-mini`.
+- Optional variable `CONSUMERSIM_POPULATION_SIZE`: defaults to `240` when the external model is enabled.
+- Optional variable `CONSUMERSIM_CORE_RATIO`: defaults to `0.025` when the external model is enabled.
+- Optional secret `CONSUMERSIM_BING_NEWS_API_KEY` or `BING_NEWS_API_KEY`: improves live news fetch quality.
+
+If `CONSUMERSIM_MODEL_API_KEY` is absent, Actions prints a warning and uses the local predictor instead of silently attempting a failed API call.
 
 `.github/workflows/update-site.yml` runs on Mondays, on the first day of each month, and manually through `workflow_dispatch`. It:
 
