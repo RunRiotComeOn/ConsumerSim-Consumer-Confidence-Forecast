@@ -87,19 +87,6 @@ jobs:
           fi
           python scripts/generate_site_data.py "${args[@]}"
 
-      - name: Commit updated data
-        shell: bash
-        run: |
-          if git diff --quiet -- data/consumersim_site_data.csv data/forecast_driver_events.csv examples/us/news.jsonl examples/us/indicators.csv examples/eu/news.jsonl examples/eu/indicators.csv examples/jp/news.jsonl examples/jp/indicators.csv; then
-            echo "No site data changes to commit."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/consumersim_site_data.csv data/forecast_driver_events.csv examples/us/news.jsonl examples/us/indicators.csv examples/eu/news.jsonl examples/eu/indicators.csv examples/jp/news.jsonl examples/jp/indicators.csv
-          git commit -m "Update ConsumerSim site data"
-          git push
-
       - name: Build static Pages artifact
         shell: bash
         run: |
@@ -121,3 +108,16 @@ jobs:
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Commit updated data
+        shell: bash
+        run: |
+          if git diff --quiet -- data/consumersim_site_data.csv data/forecast_driver_events.csv examples/us/news.jsonl examples/us/indicators.csv examples/eu/news.jsonl examples/eu/indicators.csv examples/jp/news.jsonl examples/jp/indicators.csv; then
+            echo "No site data changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/consumersim_site_data.csv data/forecast_driver_events.csv examples/us/news.jsonl examples/us/indicators.csv examples/eu/news.jsonl examples/eu/indicators.csv examples/jp/news.jsonl examples/jp/indicators.csv
+          git commit -m "Update ConsumerSim site data"
+          git push
