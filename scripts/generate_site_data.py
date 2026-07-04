@@ -367,22 +367,18 @@ def smooth_weekly_prediction_rows(rows: list[dict[str, str]]) -> None:
         )
         if len(weekly_rows) < 2:
             continue
-        monthly_truth = monthly_groundtruth_by_period(rows, region)
-        anchor = latest_monthly_groundtruth(monthly_truth)
+        anchor = latest_monthly_groundtruth(rows, region)
         latest = parse_float(weekly_rows[-1].get("forecast"))
         if anchor is None or latest is None:
             continue
-        after_anchor_rows = [
-            row for row in weekly_rows
-            if month_sort_key(week_period(row)) > month_sort_key(latest_monthly_groundtruth_period(monthly_truth))
-        ]
+        span = max(1, len(weekly_rows) - 1)
         prior_forecast: float | None = None
-        for row in weekly_rows:
+        for index, row in enumerate(weekly_rows):
             raw_forecast = parse_float(row.get("forecast"))
             if raw_forecast is None:
                 continue
-            target = weekly_month_target(row, weekly_rows, monthly_truth, after_anchor_rows, anchor, latest)
-            smoothed = round(raw_forecast * 0.25 + target * 0.75, 2)
+            target = anchor + (latest - anchor) * (index / span)
+            smoothed = round(raw_forecast * 0.35 + target * 0.65, 2)
             delta = smoothed - raw_forecast
             row["forecast"] = f"{smoothed:.2f}"
             for field in ("actual", "error"):
@@ -393,85 +389,18 @@ def smooth_weekly_prediction_rows(rows: list[dict[str, str]]) -> None:
             prior_forecast = smoothed
 
 
-def monthly_groundtruth_by_period(rows: list[dict[str, str]], region: str) -> dict[str, float]:
-    values: dict[str, float] = {}
+def latest_monthly_groundtruth(rows: list[dict[str, str]], region: str) -> float | None:
+    values: list[float] = []
     for row in sorted(
         [item for item in rows if item.get("record_type") == "series" and item.get("region") == region],
         key=lambda item: int(item.get("sort_order") or 0),
     ):
         if row.get("forecast"):
             continue
-        period = row.get("period") or row.get("week_label")
         actual = parse_float(row.get("error"))
-        if period and actual is not None:
-            values[period] = actual
-    return values
-
-
-def weekly_month_target(
-    row: dict[str, str],
-    weekly_rows: list[dict[str, str]],
-    monthly_truth: dict[str, float],
-    after_anchor_rows: list[dict[str, str]],
-    anchor: float,
-    latest: float,
-) -> float:
-    period = week_period(row)
-    previous = previous_display_month_label(period)
-    if period in monthly_truth and previous in monthly_truth:
-        month_rows = [item for item in weekly_rows if week_period(item) == period]
-        position = month_rows.index(row) + 1
-        share = position / max(1, len(month_rows))
-        return monthly_truth[previous] + (monthly_truth[period] - monthly_truth[previous]) * share
-    if row in after_anchor_rows:
-        position = after_anchor_rows.index(row) + 1
-        share = position / max(1, len(after_anchor_rows))
-        return anchor + (latest - anchor) * share
-    return anchor
-
-
-def week_period(row: dict[str, str]) -> str:
-    week = row.get("week_label") or ""
-    target = row.get("period") or ""
-    week_month = week.split(" ", 1)[0]
-    target_parts = target.split("-")
-    if len(target_parts) != 2 or not week_month:
-        return target
-    return f"{week_month}-{target_parts[1]}"
-
-
-def latest_monthly_groundtruth(monthly_truth: dict[str, float]) -> float | None:
-    period = latest_monthly_groundtruth_period(monthly_truth)
-    return monthly_truth.get(period) if period else None
-
-
-def latest_monthly_groundtruth_period(monthly_truth: dict[str, float]) -> str:
-    return max(monthly_truth, key=month_sort_key) if monthly_truth else ""
-
-
-def month_sort_key(period: str) -> tuple[int, int]:
-    match = period.split("-")
-    if len(match) != 2:
-        return (0, 0)
-    month_number = list(calendar.month_abbr).index(match[0]) if match[0] in calendar.month_abbr else 0
-    return (2000 + int(match[1]), month_number)
-
-
-def previous_display_month_label(period: str) -> str:
-    parts = period.split("-")
-    if len(parts) != 2:
-        return ""
-    month_name, year_suffix = parts
-    month_number = list(calendar.month_abbr).index(month_name) if month_name in calendar.month_abbr else 0
-    if month_number <= 0:
-        return ""
-    year = 2000 + int(year_suffix)
-    if month_number == 1:
-        month_number = 12
-        year -= 1
-    else:
-        month_number -= 1
-    return f"{calendar.month_abbr[month_number]}-{str(year)[2:]}"
+        if actual is not None:
+            values.append(actual)
+    return values[-1] if values else None
 
 
 def parse_float(value: str | None) -> float | None:
