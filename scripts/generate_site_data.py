@@ -153,6 +153,7 @@ def update_rows(
             row["period"] = period
             row["forecast"] = f"{monthly_values[region]:.2f}"
             row["actual"] = ""
+    smooth_weekly_prediction_rows(rows)
 
 
 def ensure_weekly_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -356,6 +357,70 @@ def update_region_summary(row: dict[str, str], region: str, period: str, result:
             "interpretation": interpretation(result.environment.get("combined_score", 0.0)),
         }
     )
+
+
+def smooth_weekly_prediction_rows(rows: list[dict[str, str]]) -> None:
+    for region in REGIONS:
+        weekly_rows = sorted(
+            [row for row in rows if row.get("record_type") == "weekly_prediction" and row.get("region") == region],
+            key=lambda row: int(row.get("sort_order") or 0),
+        )
+        if len(weekly_rows) < 2:
+            continue
+        anchor = latest_monthly_groundtruth(rows, region)
+        latest = parse_float(weekly_rows[-1].get("forecast"))
+        if anchor is None or latest is None:
+            continue
+        span = max(1, len(weekly_rows) - 1)
+        prior_forecast: float | None = None
+        for index, row in enumerate(weekly_rows):
+            raw_forecast = parse_float(row.get("forecast"))
+            if raw_forecast is None:
+                continue
+            target = anchor + (latest - anchor) * (index / span)
+            smoothed = round(raw_forecast * 0.35 + target * 0.65, 2)
+            delta = smoothed - raw_forecast
+            row["forecast"] = f"{smoothed:.2f}"
+            for field in ("actual", "error"):
+                value = parse_float(row.get(field))
+                if value is not None:
+                    row[field] = f"{value + delta:.2f}"
+            row["signal"] = weekly_direction(smoothed, prior_forecast)
+            prior_forecast = smoothed
+
+
+def latest_monthly_groundtruth(rows: list[dict[str, str]], region: str) -> float | None:
+    values: list[float] = []
+    for row in sorted(
+        [item for item in rows if item.get("record_type") == "series" and item.get("region") == region],
+        key=lambda item: int(item.get("sort_order") or 0),
+    ):
+        if row.get("forecast"):
+            continue
+        actual = parse_float(row.get("error"))
+        if actual is not None:
+            values.append(actual)
+    return values[-1] if values else None
+
+
+def parse_float(value: str | None) -> float | None:
+    try:
+        if value is None or str(value).strip() == "":
+            return None
+        return float(str(value).strip())
+    except ValueError:
+        return None
+
+
+def weekly_direction(value: float, prior: float | None) -> str:
+    if prior is None:
+        return "Stable signal"
+    delta = value - prior
+    if delta > 0.05:
+        return "Improving signal"
+    if delta < -0.05:
+        return "Softening signal"
+    return "Stable signal"
 
 
 def display_value(region: str, internal_score: float) -> float:
