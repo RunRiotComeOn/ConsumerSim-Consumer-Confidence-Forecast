@@ -1,4 +1,4 @@
 observed_at,name,z_score,weight
-2026-07-20,news_sentiment_balance,-0.2647,1.00
-2026-07-20,news_coverage_intensity,-1.0000,0.65
-2026-07-20,negative_news_pressure,-0.2647,0.80
+2026-07-27,news_sentiment_balance,-0.3750,1.00
+2026-07-27,news_coverage_intensity,-1.0000,0.65
+2026-07-27,negative_news_pressure,-0.3750,0.80
